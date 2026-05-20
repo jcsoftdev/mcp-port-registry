@@ -31,7 +31,7 @@ echo "Platform: $OS / $ARCH — supported ✓"
 if command -v bun &>/dev/null; then
   echo "Bun already installed: $(bun --version)"
 else
-  echo "Installing Bun…"
+  echo "Installing Bun..."
   curl -fsSL https://bun.sh/install | bash
 
   # Make bun available in this shell session
@@ -49,18 +49,18 @@ fi
 
 # ── 3. Clone or update repo ───────────────────────────────────────────────────
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  echo "Updating existing repo at $INSTALL_DIR…"
+  echo "Updating existing repo at ${INSTALL_DIR}..."
   git -C "$INSTALL_DIR" pull --ff-only
 else
-  echo "Cloning repo to $INSTALL_DIR…"
+  echo "Cloning repo to ${INSTALL_DIR}..."
   mkdir -p "$(dirname "$INSTALL_DIR")"
   git clone "$REPO_URL" "$INSTALL_DIR"
 fi
 
 # ── 4. Install dependencies ───────────────────────────────────────────────────
-echo "Installing dependencies…"
+echo "Installing dependencies..."
 bun install --cwd "$INSTALL_DIR"
 
 # ── 5. Hand off to TUI (reopen stdin from /dev/tty so @clack/prompts works) ──
-echo "Launching installer…"
+echo "Launching installer..."
 exec bun "$INSTALL_DIR/installer/index.ts" </dev/tty
