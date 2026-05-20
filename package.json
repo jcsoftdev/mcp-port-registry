@@ -1,0 +1,12 @@
+{
+  "name": "port-registry",
+  "version": "1.0.0",
+  "description": "Global MCP server for managing port assignments across projects",
+  "type": "module",
+  "scripts": {
+    "start": "bun src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  }
+}

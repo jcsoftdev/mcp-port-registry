@@ -1,0 +1,4 @@
+node_modules/
+registry.db
+registry.db-wal
+registry.db-shm
