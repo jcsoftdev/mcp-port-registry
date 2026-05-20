@@ -21,6 +21,7 @@ import { windsurfAdapter } from "./clients/windsurf";
 import { clineAdapter } from "./clients/cline";
 import { continueAdapter } from "./clients/continue";
 import { zedAdapter } from "./clients/zed";
+import { piAdapter } from "./clients/pi";
 
 const ALL_ADAPTERS: Adapter[] = [
   claudeCodeAdapter,
@@ -30,6 +31,7 @@ const ALL_ADAPTERS: Adapter[] = [
   clineAdapter,
   continueAdapter,
   zedAdapter,
+  piAdapter,
 ];
 
 // Server path: the MCP server entry point

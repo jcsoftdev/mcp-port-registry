@@ -34,7 +34,7 @@ The installer will:
 3. Clone the repo to `~/.local/share/mcp-port-registry`
 4. Launch an interactive TUI to detect and configure supported clients
 
-**Supported clients**: Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue, Zed
+**Supported clients**: Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue, Zed, Pi (gentle-ai)
 
 ### Method 2 — Local installer (if you already cloned the repo)
 
