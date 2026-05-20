@@ -3,6 +3,16 @@
   "version": "1.0.0",
   "description": "Global MCP server for managing port assignments across projects",
   "type": "module",
+  "author": "jcsoftdev",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jcsoftdev/mcp-port-registry.git"
+  },
+  "homepage": "https://github.com/jcsoftdev/mcp-port-registry#readme",
+  "bugs": {
+    "url": "https://github.com/jcsoftdev/mcp-port-registry/issues"
+  },
   "scripts": {
     "start": "bun src/server.ts",
     "test": "bun test"
