@@ -15,22 +15,73 @@ Project B + nextjs    → 3001
 
 ## Requirements
 
-- [Bun](https://bun.sh) >= 1.0 (uses `bun:sqlite` — zero external DB dependencies)
+- macOS or Linux (x86_64 or arm64)
+- Internet access (to install Bun and clone the repo)
 
 ## Installation
 
+Pick the method that fits your setup. All four end up with the same registered MCP server.
+
+### Method 1 — One-line installer (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jcsoftdev/mcp-port-registry/main/install.sh | bash
+```
+
+The installer will:
+1. Detect your OS and architecture (refuses on Windows native / 32-bit ARM)
+2. Install [Bun](https://bun.sh) if not already present
+3. Clone the repo to `~/.local/share/mcp-port-registry`
+4. Launch an interactive TUI to detect and configure supported clients
+
+**Supported clients**: Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue, Zed
+
+### Method 2 — Local installer (if you already cloned the repo)
+
+Skips the curl + clone steps and runs the same interactive TUI:
+
+```bash
+cd /path/to/mcp-port-registry
+bun install
+bun installer/index.ts
+```
+
+Useful for contributors, or after pulling updates with `git pull`.
+
+### Method 3 — Claude Code CLI (one command, Claude Code only)
+
+If you only need it in Claude Code and prefer not to run any TUI:
+
+```bash
+# Clone first if you haven't
+git clone https://github.com/jcsoftdev/mcp-port-registry.git ~/.local/share/mcp-port-registry
+cd ~/.local/share/mcp-port-registry && bun install && cd -
+
+# Register (user scope — available in every project)
+claude mcp add port-registry -s user -- bun "$HOME/.local/share/mcp-port-registry/src/server.ts"
+```
+
+Restart Claude Code. Verify with `claude mcp list` or `/mcp` inside Claude Code.
+
+<details>
+<summary>Method 4 — Manual JSON edit (advanced, all other clients)</summary>
+
+### Manual installation
+
 ```bash
 # Clone
-git clone git@github.com:jcsoftdev/mcp-port-registry.git
-cd mcp-port-registry
+git clone https://github.com/jcsoftdev/mcp-port-registry.git ~/.local/share/mcp-port-registry
+cd ~/.local/share/mcp-port-registry
 
 # Install dependencies
 bun install
 ```
 
-### Register in Claude Code
+Then add the entry to each client's config manually.
 
-Add to `~/.claude/.claude.json`:
+> **Important**: MCP clients do **not** expand `~` or `$HOME` inside `args`. Replace `<ABSOLUTE_PATH>` with the real absolute path (e.g. `/Users/you/.local/share/mcp-port-registry/src/server.ts` or `/home/you/.local/share/mcp-port-registry/src/server.ts`).
+
+**Claude Code** — add to `~/.claude.json` at root level:
 
 ```json
 {
@@ -38,13 +89,40 @@ Add to `~/.claude/.claude.json`:
     "port-registry": {
       "type": "stdio",
       "command": "bun",
-      "args": ["/path/to/mcp-port-registry/src/server.ts"]
+      "args": ["<ABSOLUTE_PATH>/mcp-port-registry/src/server.ts"]
     }
   }
 }
 ```
 
-Restart Claude Code. The tools will be available in all projects.
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `~/.config/Claude/claude_desktop_config.json` (Linux):
+
+```json
+{
+  "mcpServers": {
+    "port-registry": {
+      "command": "bun",
+      "args": ["<ABSOLUTE_PATH>/mcp-port-registry/src/server.ts"]
+    }
+  }
+}
+```
+
+**Zed** — add to `~/.config/zed/settings.json`:
+
+```json
+{
+  "context_servers": {
+    "port-registry": {
+      "command": { "path": "bun", "args": ["<ABSOLUTE_PATH>/mcp-port-registry/src/server.ts"] }
+    }
+  }
+}
+```
+
+Restart the client after editing. The tools will be available in all projects.
+
+</details>
 
 ## Tools
 
@@ -119,6 +197,39 @@ List all known technologies and their base ports. Optionally add a new one.
 ## Storage
 
 SQLite database at `registry.db` (created automatically on first use). WAL mode enabled for concurrent access. The DB stays local — it's gitignored.
+
+## Skills
+
+### `port-setup`
+
+An AI agent skill that auto-detects your project's tech stack and wires up collision-free ports in `.env` and `docker-compose.yml` — no manual bookkeeping.
+
+**Prerequisite**: port-registry MCP server must be registered in your harness (see [Installation](#installation)).
+
+**Triggers** (say any of these to your AI assistant):
+
+| Language | Phrases |
+|----------|---------|
+| English | "set up ports", "init ports", "configure ports", "assign ports", "port setup" |
+| Spanish | "asignar puertos", "configurar puertos", "configura puertos del proyecto" |
+
+**What it does:**
+1. Detects your tech stack (PostgreSQL, Redis, Next.js, etc.) via `package.json`, `pyproject.toml`, and `docker-compose.yml`.
+2. Scans existing `.env` for already-assigned ports and pins them in the registry (`port_set`).
+3. Calls `port_get` for each unassigned tech — collision-free, idempotent.
+4. Writes port vars to `.env` (and `.env.local` if present) and updates `docker-compose.yml` ports.
+5. Creates `.env.bak` / `docker-compose.yml.bak` before any modification.
+6. Prints a summary table of all assignments.
+
+**Dry-run mode**: say "dry run" / "preview" / "sin escribir" — shows planned changes without writing any files.
+
+**Installing the skill** (copy to your harness skills directory):
+```bash
+# Claude Code
+cp -r skills/port-setup ~/.claude/skills/port-setup
+```
+
+**Skill source**: [`skills/port-setup/`](skills/port-setup/)
 
 ## License
 

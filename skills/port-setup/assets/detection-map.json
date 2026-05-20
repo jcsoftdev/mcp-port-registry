@@ -1,0 +1,216 @@
+{
+  "version": "1",
+  "technologies": {
+    "postgresql": {
+      "aliases": ["postgres", "pg"],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["pg", "postgres", "@prisma/client"],
+        "pyproject_deps": ["psycopg2", "psycopg2-binary", "asyncpg"],
+        "compose_service_images": ["postgres"],
+        "compose_service_names": ["postgres", "postgresql", "db"]
+      },
+      "env_var": "POSTGRES_PORT",
+      "compose_service": "postgres",
+      "compose_internal_port": 5432,
+      "kind": "database"
+    },
+    "mysql": {
+      "aliases": ["mariadb"],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["mysql2", "mysql"],
+        "pyproject_deps": ["pymysql", "mysql-connector-python"],
+        "compose_service_images": ["mysql", "mariadb"],
+        "compose_service_names": ["mysql", "mariadb", "db"]
+      },
+      "env_var": "MYSQL_PORT",
+      "compose_service": "mysql",
+      "compose_internal_port": 3306,
+      "kind": "database"
+    },
+    "redis": {
+      "aliases": [],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["redis", "ioredis"],
+        "pyproject_deps": ["redis", "aioredis"],
+        "compose_service_images": ["redis"],
+        "compose_service_names": ["redis", "cache"]
+      },
+      "env_var": "REDIS_PORT",
+      "compose_service": "redis",
+      "compose_internal_port": 6379,
+      "kind": "cache"
+    },
+    "mongodb": {
+      "aliases": ["mongo"],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["mongoose", "mongodb"],
+        "pyproject_deps": ["pymongo", "motor"],
+        "compose_service_images": ["mongo", "mongodb"],
+        "compose_service_names": ["mongo", "mongodb"]
+      },
+      "env_var": "MONGO_PORT",
+      "compose_service": "mongo",
+      "compose_internal_port": 27017,
+      "kind": "database"
+    },
+    "rabbitmq": {
+      "aliases": [],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["amqplib", "amqp-connection-manager"],
+        "pyproject_deps": ["pika", "aio-pika"],
+        "compose_service_images": ["rabbitmq"],
+        "compose_service_names": ["rabbitmq", "amqp"]
+      },
+      "env_var": "RABBITMQ_PORT",
+      "compose_service": "rabbitmq",
+      "compose_internal_port": 5672,
+      "kind": "infra"
+    },
+    "elasticsearch": {
+      "aliases": ["elastic"],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["@elastic/elasticsearch"],
+        "pyproject_deps": ["elasticsearch", "elasticsearch-async"],
+        "compose_service_images": ["elasticsearch", "docker.elastic.co/elasticsearch"],
+        "compose_service_names": ["elasticsearch", "elastic"]
+      },
+      "env_var": "ELASTIC_PORT",
+      "compose_service": "elasticsearch",
+      "compose_internal_port": 9200,
+      "kind": "search"
+    },
+    "minio": {
+      "aliases": [],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["minio"],
+        "pyproject_deps": ["minio"],
+        "compose_service_images": ["minio/minio", "minio"],
+        "compose_service_names": ["minio"]
+      },
+      "env_var": "MINIO_PORT",
+      "compose_service": "minio",
+      "compose_internal_port": 9000,
+      "kind": "infra"
+    },
+    "grafana": {
+      "aliases": [],
+      "detect": {
+        "files": [],
+        "package_json_deps": [],
+        "pyproject_deps": [],
+        "compose_service_images": ["grafana/grafana", "grafana"],
+        "compose_service_names": ["grafana"]
+      },
+      "env_var": "GRAFANA_PORT",
+      "compose_service": "grafana",
+      "compose_internal_port": 3000,
+      "kind": "infra"
+    },
+    "nginx": {
+      "aliases": [],
+      "detect": {
+        "files": ["nginx.conf", "nginx/*.conf"],
+        "package_json_deps": [],
+        "pyproject_deps": [],
+        "compose_service_images": ["nginx"],
+        "compose_service_names": ["nginx", "web"]
+      },
+      "env_var": "NGINX_PORT",
+      "compose_service": "nginx",
+      "compose_internal_port": 80,
+      "kind": "infra"
+    },
+    "nextjs": {
+      "aliases": ["next"],
+      "detect": {
+        "files": ["next.config.js", "next.config.ts", "next.config.mjs"],
+        "package_json_deps": ["next"],
+        "pyproject_deps": [],
+        "compose_service_images": [],
+        "compose_service_names": []
+      },
+      "env_var": "PORT",
+      "kind": "framework",
+      "priority": 1
+    },
+    "vite": {
+      "aliases": [],
+      "detect": {
+        "files": ["vite.config.js", "vite.config.ts", "vite.config.mjs"],
+        "package_json_deps": ["vite"],
+        "pyproject_deps": [],
+        "compose_service_images": [],
+        "compose_service_names": []
+      },
+      "env_var": "VITE_PORT",
+      "kind": "framework",
+      "priority": 2
+    },
+    "express": {
+      "aliases": [],
+      "detect": {
+        "files": [],
+        "package_json_deps": ["express"],
+        "pyproject_deps": [],
+        "compose_service_images": [],
+        "compose_service_names": []
+      },
+      "env_var": "PORT",
+      "kind": "framework",
+      "priority": 3
+    },
+    "fastapi": {
+      "aliases": [],
+      "detect": {
+        "files": [],
+        "package_json_deps": [],
+        "pyproject_deps": ["fastapi"],
+        "compose_service_images": [],
+        "compose_service_names": []
+      },
+      "env_var": "FASTAPI_PORT",
+      "kind": "framework",
+      "priority": 4
+    },
+    "django": {
+      "aliases": [],
+      "detect": {
+        "files": ["manage.py"],
+        "package_json_deps": [],
+        "pyproject_deps": ["Django", "django"],
+        "compose_service_images": [],
+        "compose_service_names": []
+      },
+      "env_var": "DJANGO_PORT",
+      "kind": "framework",
+      "priority": 5
+    },
+    "flask": {
+      "aliases": [],
+      "detect": {
+        "files": ["wsgi.py", "app.py"],
+        "package_json_deps": [],
+        "pyproject_deps": ["Flask", "flask"],
+        "compose_service_images": [],
+        "compose_service_names": []
+      },
+      "env_var": "FLASK_PORT",
+      "kind": "framework",
+      "priority": 6
+    }
+  },
+  "project_name_sources": [
+    { "source": "git_remote", "command": "git remote get-url origin" },
+    { "source": "package_json", "path": "package.json", "field": "name" },
+    { "source": "pyproject", "path": "pyproject.toml", "field": "project.name" },
+    { "source": "go_mod", "path": "go.mod", "field": "module" },
+    { "source": "cwd_basename" }
+  ]
+}

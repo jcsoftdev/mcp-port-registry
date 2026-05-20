@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/jcsoftdev/mcp-port-registry/skills/port-setup/assets/detection-map.schema.json",
+  "title": "DetectionMap",
+  "description": "Schema for the port-setup skill detection-map.json asset",
+  "type": "object",
+  "required": ["version", "technologies", "project_name_sources"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Schema version string (e.g. \"1\")"
+    },
+    "technologies": {
+      "type": "object",
+      "description": "Map of tech-id to technology definition",
+      "additionalProperties": {
+        "$ref": "#/definitions/TechnologyEntry"
+      }
+    },
+    "project_name_sources": {
+      "type": "array",
+      "description": "Ordered list of strategies for detecting the project name",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/ProjectNameSource"
+      }
+    }
+  },
+  "definitions": {
+    "TechnologyEntry": {
+      "type": "object",
+      "required": ["detect", "env_var", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Alternative names for this technology"
+        },
+        "detect": {
+          "$ref": "#/definitions/DetectConfig"
+        },
+        "env_var": {
+          "type": "string",
+          "description": "Environment variable name for the port (e.g. POSTGRES_PORT)",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "compose_service": {
+          "type": "string",
+          "description": "Canonical docker-compose service name"
+        },
+        "compose_internal_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "The internal (container-side) port for this technology"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["database", "cache", "framework", "infra", "search"],
+          "description": "Category of this technology"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Priority for PORT-variable assignment when multiple frameworks detected (lower = higher priority)"
+        }
+      }
+    },
+    "DetectConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File path globs to check for existence"
+        },
+        "package_json_deps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "npm package names to look for in dependencies / devDependencies"
+        },
+        "pyproject_deps": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Python package names to look for in pyproject.toml / requirements.txt"
+        },
+        "compose_service_images": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Docker image prefixes to match against docker-compose service images"
+        },
+        "compose_service_names": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "docker-compose service names to match"
+        }
+      }
+    },
+    "ProjectNameSource": {
+      "type": "object",
+      "required": ["source"],
+      "additionalProperties": true,
+      "properties": {
+        "source": {
+          "type": "string",
+          "enum": ["git_remote", "package_json", "pyproject", "go_mod", "cwd_basename"]
+        },
+        "command": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

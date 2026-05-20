@@ -4,9 +4,15 @@
   "description": "Global MCP server for managing port assignments across projects",
   "type": "module",
   "scripts": {
-    "start": "bun src/server.ts"
+    "start": "bun src/server.ts",
+    "test": "bun test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0"
+    "@clack/prompts": "^1.4.0",
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0"
   }
 }
