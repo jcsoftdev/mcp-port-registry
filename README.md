@@ -196,7 +196,9 @@ List all known technologies and their base ports. Optionally add a new one.
 
 ## Storage
 
-SQLite database at `registry.db` (created automatically on first use). WAL mode enabled for concurrent access. The DB stays local — it's gitignored.
+SQLite database at `$XDG_DATA_HOME/mcp-port-registry/registry.db` (defaults to `~/.local/share/mcp-port-registry/registry.db`). Created automatically on first use, WAL mode enabled. The path is fixed regardless of where the source code lives, so every install (dev clone, `~/.local/share`, Pi, etc.) shares the same assignments and avoids fragmentation.
+
+Override with `PORT_REGISTRY_DB=/abs/path/to.db` (useful for tests or per-host isolation).
 
 ## Skills
 

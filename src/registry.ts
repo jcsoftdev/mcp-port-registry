@@ -1,11 +1,23 @@
 import { Database } from "bun:sqlite";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { homedir } from "node:os";
+import { mkdirSync } from "node:fs";
 import type { PortAssignment } from "./types.js";
 import { DEFAULT_TECHNOLOGIES } from "./technologies.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = join(__dirname, "..", "registry.db");
+// Single source of truth across every install path (dev clone, ~/.local/share, etc.).
+// Override with PORT_REGISTRY_DB to relocate (tests, isolation).
+function resolveDbPath(): string {
+  if (process.env.PORT_REGISTRY_DB) return process.env.PORT_REGISTRY_DB;
+  const dataHome =
+    process.env.XDG_DATA_HOME && process.env.XDG_DATA_HOME.length > 0
+      ? process.env.XDG_DATA_HOME
+      : join(homedir(), ".local", "share");
+  return join(dataHome, "mcp-port-registry", "registry.db");
+}
+
+const DB_PATH = resolveDbPath();
+mkdirSync(join(DB_PATH, ".."), { recursive: true });
 
 const db = new Database(DB_PATH, { create: true });
 db.exec("PRAGMA journal_mode = WAL");
