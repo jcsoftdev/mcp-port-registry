@@ -61,6 +61,13 @@ fi
 echo "Installing dependencies..."
 bun install --cwd "$INSTALL_DIR"
 
-# ── 5. Hand off to TUI (reopen stdin from /dev/tty so @clack/prompts works) ──
+# ── 5. Hand off to TUI ────────────────────────────────────────────────────────
+# Under `curl | bash`, bash's stdin is the pipe. We must rebind fd 0 to the
+# controlling terminal BEFORE exec'ing bun, otherwise @clack/prompts renders
+# but never receives keystrokes. Also rebind stdout/stderr to the tty so the
+# TUI redraws cleanly when invoked from a pipeline.
 echo "Launching installer..."
-exec bun "$INSTALL_DIR/installer/index.ts" </dev/tty
+if [[ -e /dev/tty ]]; then
+  exec </dev/tty >/dev/tty 2>/dev/tty
+fi
+exec bun "$INSTALL_DIR/installer/index.ts"
