@@ -65,37 +65,35 @@ fi
 echo "Installing dependencies..."
 bun install --cwd "$INSTALL_DIR"
 
-# ── 5. Hand off to TUI ────────────────────────────────────────────────────────
-# Under `curl | bash`, only stdin is the pipe (it is this script's own source);
-# stdout and stderr are already the user's terminal. So rebind stdin only, and
-# only for the installer process:
+# ── 5. Hand off to installer ──────────────────────────────────────────────────
+# Do NOT reopen /dev/tty to fake an interactive stdin here. Bun 1.3.14 on macOS
+# cannot kqueue a freshly opened /dev/tty: as stdout it dies with
+# "EINVAL: invalid argument, kqueue" (process.stdout ends up undefined and
+# @clack/prompts crashes in s.write), and as stdin it registers as a TTY, renders
+# the prompt, and then never delivers a single keystroke — a frozen picker.
 #
-#   * Redirecting on the command itself (not via a bare `exec </dev/tty`) keeps
-#     bash reading the rest of this script from the pipe. A bare rebind makes
-#     bash read its next command from the keyboard — a blank, frozen-looking
-#     prompt.
-#   * `0<>/dev/tty` opens read-write, matching how a real terminal fd looks.
-#     Adding `>/dev/tty 2>/dev/tty` on top would hand Bun freshly opened
-#     write-only tty fds, and node:tty's WriteStream dies there with
-#     "EINVAL: invalid argument, kqueue", leaving process.stdout undefined and
-#     crashing @clack/prompts.
+# So the fds are simply inherited, which gives the right mode either way:
+#   * `curl … | bash`  -> stdin is the pipe, the installer runs non-interactive
+#                          and configures every detected client.
+#   * `bash install.sh` -> stdin is the real terminal, inherited from the shell,
+#                          and the interactive picker works normally.
 INSTALLER_ENTRY="$INSTALL_DIR/installer/index.ts"
+
+if [[ ! -t 0 ]]; then
+  echo "Non-interactive input detected — every detected client will be configured."
+  echo "To pick clients yourself, run: bun ${INSTALLER_ENTRY}"
+fi
 
 echo "Launching installer..."
 STATUS=0
-if [[ -e /dev/tty ]] && (exec 3<>/dev/tty) 2>/dev/null; then
-  bun "$INSTALLER_ENTRY" 0<>/dev/tty || STATUS=$?
-else
-  echo "Warning: no controlling terminal detected; the interactive installer may not respond to keystrokes." >&2
-  bun "$INSTALLER_ENTRY" || STATUS=$?
-fi
+bun "$INSTALLER_ENTRY" || STATUS=$?
 
 if [[ "$STATUS" -eq 0 ]]; then
   exit 0
 fi
 
 echo "" >&2
-echo "The interactive installer exited with status ${STATUS}." >&2
-echo "The repo and its dependencies are installed; you can run it directly with:" >&2
+echo "The installer exited with status ${STATUS}." >&2
+echo "The repo and its dependencies are installed; you can rerun it with:" >&2
 echo "  bun ${INSTALLER_ENTRY}" >&2
 exit "$STATUS"
