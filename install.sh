@@ -48,6 +48,10 @@ else
 fi
 
 # ── 3. Clone or update repo ───────────────────────────────────────────────────
+# Never let git open an interactive credential prompt: the repo is public, and a
+# prompt here would stall a non-interactive `curl | bash` run indefinitely.
+export GIT_TERMINAL_PROMPT=0
+
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   echo "Updating existing repo at ${INSTALL_DIR}..."
   git -C "$INSTALL_DIR" pull --ff-only
@@ -62,12 +66,16 @@ echo "Installing dependencies..."
 bun install --cwd "$INSTALL_DIR"
 
 # ── 5. Hand off to TUI ────────────────────────────────────────────────────────
-# Under `curl | bash`, bash's stdin is the pipe. We must rebind fd 0 to the
-# controlling terminal BEFORE exec'ing bun, otherwise @clack/prompts renders
-# but never receives keystrokes. Also rebind stdout/stderr to the tty so the
-# TUI redraws cleanly when invoked from a pipeline.
+# Under `curl | bash`, bash's stdin IS the script source (the pipe). A bare
+# `exec </dev/tty` would therefore make bash read the *rest of this script* from
+# the terminal, which looks like a frozen prompt. Instead, attach the terminal
+# to the exec'd process only, as redirections on the exec command itself, so
+# bash never re-reads its own source from the tty. @clack/prompts still gets a
+# real fd 0/1/2 on the terminal.
 echo "Launching installer..."
-if [[ -e /dev/tty ]]; then
-  exec </dev/tty >/dev/tty 2>/dev/tty
+if [[ -e /dev/tty ]] && (exec 3<>/dev/tty) 2>/dev/null; then
+  exec bun "$INSTALL_DIR/installer/index.ts" </dev/tty >/dev/tty 2>/dev/tty
+else
+  echo "Warning: no controlling terminal detected; the interactive installer may not respond to keystrokes." >&2
+  exec bun "$INSTALL_DIR/installer/index.ts"
 fi
-exec bun "$INSTALL_DIR/installer/index.ts"
