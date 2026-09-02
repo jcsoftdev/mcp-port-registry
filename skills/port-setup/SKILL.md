@@ -105,8 +105,8 @@ git rev-parse --show-toplevel    # worktree directory
   branches inside a worktree must not change its ports.
 - Not a git repo → treat as main worktree.
 
-Shortcut if the registry CLI is available: `bun <registry>/src/cli.ts whoami --json`
-returns `{ project, worktree, isMain }`.
+Shortcut: `port-registry whoami --json` (installed by the registry's installer) returns
+`{ project, worktree, isMain }`. Fallback: `bun ~/.local/share/mcp-port-registry/src/cli.ts whoami --json`.
 
 Record `worktree` and `isMain`. They decide which tools STEP 5 calls.
 
@@ -291,8 +291,8 @@ When the user says the task/worktree is done ("release ports", "liberar puertos"
 3. Report the released ports. Do not touch `.env` — the worktree is going away.
 
 If the worktree was already deleted without releasing, the registry self-heals:
-`port_gc(project, worktrees=[...live worktrees...])` or the SessionStart hook
-reclaims its leases.
+`port_gc(project, worktrees=[...live worktrees...])`, `port-registry gc --auto`, or the
+SessionStart hook reclaims its leases.
 
 ---
 

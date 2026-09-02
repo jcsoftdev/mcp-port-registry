@@ -12,6 +12,7 @@ import path from "node:path";
 import { isInteractive } from "./lib/tty";
 import { runAdapter } from "./lib/adapter";
 import type { Adapter, WriteOutcome } from "./lib/adapter";
+import { linkCli, isOnPath, defaultBinDir } from "./lib/link-cli";
 
 // Import all adapter singletons
 import { claudeCodeAdapter } from "./clients/claude-code";
@@ -34,13 +35,11 @@ const ALL_ADAPTERS: Adapter[] = [
   piAdapter,
 ];
 
+const REPO_ROOT = path.join(import.meta.dirname ?? __dirname, "..");
 // Server path: the MCP server entry point
-const SERVER_PATH = path.join(
-  import.meta.dirname ?? __dirname,
-  "..",
-  "src",
-  "server.ts"
-);
+const SERVER_PATH = path.join(REPO_ROOT, "src", "server.ts");
+// CLI launcher exposed as the `port-registry` command
+const LAUNCHER_PATH = path.join(REPO_ROOT, "bin", "port-registry");
 
 interface AdapterResult {
   adapter: Adapter;
@@ -49,6 +48,8 @@ interface AdapterResult {
 
 async function main() {
   intro("MCP Port Registry Installer");
+
+  installCommand();
 
   // Detect all adapters in parallel
   const detections = await Promise.all(
@@ -160,6 +161,20 @@ async function runNonInteractive(detectedAdapters: Adapter[]) {
   }
 
   printSummary(results);
+}
+
+function installCommand() {
+  const binDir = defaultBinDir();
+  const outcome = linkCli({ target: LAUNCHER_PATH, binDir });
+  if (outcome.status === "failed") {
+    log.warn(`Could not install the \`port-registry\` command: ${outcome.error}`);
+    return;
+  }
+  const verb = outcome.status === "already-linked" ? "already installed" : outcome.status;
+  log.success(`\`port-registry\` command ${verb} at ${outcome.path}`);
+  if (!isOnPath(binDir)) {
+    log.warn(`${binDir} is not on your PATH. Add this to your shell profile:\n  export PATH="${binDir}:$PATH"`);
+  }
 }
 
 function printSummary(results: AdapterResult[]) {

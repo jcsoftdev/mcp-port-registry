@@ -25,5 +25,15 @@
   },
   "devDependencies": {
     "ajv": "^8.20.0"
-  }
+  },
+  "bin": {
+    "port-registry": "bin/port-registry"
+  },
+  "files": [
+    "bin",
+    "src",
+    "skills",
+    "hooks",
+    "README.md"
+  ]
 }

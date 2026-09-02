@@ -55,7 +55,8 @@ The installer will:
 1. Detect your OS and architecture (refuses on Windows native / 32-bit ARM)
 2. Install [Bun](https://bun.sh) if not already present
 3. Clone the repo to `~/.local/share/mcp-port-registry`
-4. Launch an interactive TUI to detect and configure supported clients
+4. Link the `port-registry` command into `~/.local/bin` (warns if that dir is not on your PATH)
+5. Launch an interactive TUI to detect and configure supported clients
 
 **Supported clients**: Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue, Zed, Pi (gentle-ai)
 
@@ -82,6 +83,9 @@ cd ~/.local/share/mcp-port-registry && bun install && cd -
 
 # Register (user scope — available in every project)
 claude mcp add port-registry -s user -- bun "$HOME/.local/share/mcp-port-registry/src/server.ts"
+
+# Optional: the `port-registry` command (hooks and scripts use it)
+mkdir -p ~/.local/bin && ln -s "$HOME/.local/share/mcp-port-registry/bin/port-registry" ~/.local/bin/port-registry
 ```
 
 Restart Claude Code. Verify with `claude mcp list` or `/mcp` inside Claude Code.
@@ -233,34 +237,35 @@ Reclaim stale leases (owner dead **and** TTL expired). Pass `project` + `worktre
 | `project` | no | Scope for reconciliation (required with `worktrees`) |
 | `worktrees` | no | Live worktree ids for `project` |
 
-## CLI (for hooks and scripts)
+## `port-registry` command
 
-The same registry is reachable without MCP:
+The installer links `bin/port-registry` into `~/.local/bin`. It talks to the same SQLite registry the MCP server uses, so hooks and scripts need no MCP client:
 
 ```bash
-bun src/cli.ts whoami --json                                   # { project, worktree, isMain } from git in cwd
-bun src/cli.ts acquire --technology postgresql --technology redis   # prints PORT_POSTGRESQL=5433 …
-bun src/cli.ts release                                         # frees every lease of this worktree
-bun src/cli.ts gc --auto                                       # reconcile this repo against `git worktree list`
-bun src/cli.ts leases [--project P] [--json]
+port-registry whoami --json                                   # { project, worktree, isMain } from git in cwd
+port-registry acquire --technology postgresql --technology redis   # prints PORT_POSTGRESQL=5433 …
+port-registry release                                         # frees every lease of this worktree
+port-registry gc --auto                                       # reconcile this repo against `git worktree list`
+port-registry leases [--project P] [--json]
+port-registry hook gc|release|log                             # Claude Code hook adapter (reads the hook JSON on stdin)
 ```
 
-`acquire` / `release` default `--project` and `--worktree` to what `whoami` detects. `acquire` output is ready for `>> .env` or `>> "$CLAUDE_ENV_FILE"`.
+`acquire` / `release` default `--project` and `--worktree` to what `whoami` detects. `acquire` output is ready for `>> .env` or `>> "$CLAUDE_ENV_FILE"`. From a checkout without the link, `bun src/cli.ts …` is the same thing.
 
 ## Claude Code hooks (automatic cleanup)
 
-`hooks/claude-code/port-registry-hook.sh` wires the CLI into Claude Code's lifecycle:
+`port-registry hook <mode>` wires the registry into Claude Code's lifecycle:
 
 | Event | Mode | Effect |
 |-------|------|--------|
 | `SessionStart` | `gc` | Reclaims stale leases and leases of worktrees that no longer exist |
 | `WorktreeRemove` | `release` | Frees every lease of the worktree being removed |
 
-Merge [`hooks/claude-code/settings.snippet.json`](hooks/claude-code/settings.snippet.json) into `~/.claude/settings.json`, replacing `<ABSOLUTE_PATH>` with where this repo lives (the installer uses `~/.local/share`). The script always exits 0, so a registry hiccup can never block a session.
+Merge [`hooks/claude-code/settings.snippet.json`](hooks/claude-code/settings.snippet.json) into `~/.claude/settings.json`. It calls `"$HOME/.local/bin/port-registry"` explicitly because hooks do not always inherit your shell's PATH. `hook` always exits 0, so a registry hiccup can never block a session or a worktree operation.
 
 Cleanup is defence in depth: the hook is the fast path, `port_gc` on every acquire is the safety net. Neither `git worktree remove` nor a crashed session fires any hook, which is exactly why the TTL + owner-liveness sweep exists.
 
-To see the exact payload Claude Code sends for an event, add `port-registry-hook.sh log` to that event and read `~/.cache/mcp-port-registry/hooks.log`.
+To see the exact payload Claude Code sends for an event, add `port-registry hook log` to that event and read `~/.cache/mcp-port-registry/hooks.log`.
 
 ## Built-in Technologies
 
