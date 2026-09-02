@@ -7,11 +7,14 @@
  *   bun src/cli.ts gc [--project P --worktrees a,b] | [--auto]
  *   bun src/cli.ts leases [--project P] [--worktree W] [--json]
  *   bun src/cli.ts whoami [--json]        # project + worktree derived from git in cwd
+ *   bun src/cli.ts hook gc|release|log    # Claude Code hook adapter: reads the hook JSON on stdin, always exits 0
  *
  * `acquire` prints PORT_<TECHNOLOGY>=<port> lines, ready for `>> "$CLAUDE_ENV_FILE"` or `.env`.
  */
 import { parseArgs } from "node:util";
-import { basename, resolve } from "node:path";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { openDb } from "./db.js";
 import { createLeaseStore, type Lease, type LeaseStore } from "./leases.js";
 
@@ -79,8 +82,72 @@ function printLeases(leases: Lease[], asJson: boolean): void {
   }
 }
 
+function makeStore(): LeaseStore {
+  return createLeaseStore(openDb(), {
+    // Tests and CI run without touching real sockets.
+    ...(process.env.PORT_REGISTRY_SKIP_PROBE ? { isPortFree: async () => true } : {}),
+  });
+}
+
+async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  try {
+    return await Bun.stdin.text();
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Claude Code hook adapter. The hook JSON arrives on stdin; `worktree_path`
+ * (when present) or `cwd` names the worktree the event is about. Never fails
+ * the hook: a registry hiccup must not block a session or a worktree operation.
+ */
+async function runHook(mode: string | undefined): Promise<number> {
+  const payload = await readStdin();
+  let data: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(payload);
+    if (parsed && typeof parsed === "object") data = parsed as Record<string, unknown>;
+  } catch {
+    // not JSON — fall through with an empty payload
+  }
+  const str = (k: string): string | undefined => (typeof data[k] === "string" ? (data[k] as string) : undefined);
+  const dir = str("worktree_path") ?? str("cwd") ?? process.cwd();
+
+  try {
+    switch (mode) {
+      case "log": {
+        const logDir = join(homedir(), ".cache", "mcp-port-registry");
+        mkdirSync(logDir, { recursive: true });
+        appendFileSync(join(logDir, "hooks.log"), `${new Date().toISOString()} ${payload.trim()}\n`);
+        break;
+      }
+      case "gc": {
+        if (!existsSync(dir)) break;
+        const ctx = detectGitContext(dir);
+        makeStore().gc({ project: ctx.project, worktrees: listLiveWorktrees(dir) });
+        break;
+      }
+      case "release": {
+        if (!existsSync(dir)) break;
+        const ctx = detectGitContext(dir);
+        makeStore().release({ project: ctx.project, worktree: ctx.worktree });
+        break;
+      }
+      default:
+        break;
+    }
+  } catch {
+    // swallowed on purpose — see docstring
+  }
+  return 0;
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command, ...rest] = argv;
+  if (command === "hook") return runHook(rest[0]);
+
   const { values } = parseArgs({
     args: rest,
     options: {
@@ -104,10 +171,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
 
-  const store: LeaseStore = createLeaseStore(openDb(), {
-    // Tests and CI run without touching real sockets.
-    ...(process.env.PORT_REGISTRY_SKIP_PROBE ? { isPortFree: async () => true } : {}),
-  });
+  const store = makeStore();
 
   switch (command) {
     case "acquire": {
@@ -151,7 +215,7 @@ async function main(argv: string[]): Promise<number> {
       return 0;
 
     default:
-      throw new Error(`Unknown command "${command ?? ""}". Use: acquire | release | gc | leases | whoami`);
+      throw new Error(`Unknown command "${command ?? ""}". Use: acquire | release | gc | leases | whoami | hook`);
   }
 }
 

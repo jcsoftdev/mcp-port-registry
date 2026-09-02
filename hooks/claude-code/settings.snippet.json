@@ -3,14 +3,14 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "<ABSOLUTE_PATH>/mcp-port-registry/hooks/claude-code/port-registry-hook.sh gc" }
+          { "type": "command", "command": "\"$HOME/.local/bin/port-registry\" hook gc" }
         ]
       }
     ],
     "WorktreeRemove": [
       {
         "hooks": [
-          { "type": "command", "command": "<ABSOLUTE_PATH>/mcp-port-registry/hooks/claude-code/port-registry-hook.sh release" }
+          { "type": "command", "command": "\"$HOME/.local/bin/port-registry\" hook release" }
         ]
       }
     ]

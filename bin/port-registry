@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# `port-registry` launcher. Installed as a symlink in ~/.local/bin by the
+# installer; resolves the symlink back to the repo so it works from anywhere.
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+BUN="$(command -v bun 2>/dev/null || true)"
+if [ -z "$BUN" ] && [ -x "$HOME/.bun/bin/bun" ]; then BUN="$HOME/.bun/bin/bun"; fi
+if [ -z "$BUN" ]; then
+  echo "port-registry: bun not found in PATH (install: https://bun.sh)" >&2
+  exit 127
+fi
+
+exec "$BUN" "$ROOT/src/cli.ts" "$@"
