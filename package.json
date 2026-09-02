@@ -1,6 +1,6 @@
 {
   "name": "port-registry",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Global MCP server for managing port assignments across projects",
   "type": "module",
   "author": "jcsoftdev",
@@ -15,7 +15,8 @@
   },
   "scripts": {
     "start": "bun src/server.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "cli": "bun src/cli.ts"
   },
   "dependencies": {
     "@clack/prompts": "^1.4.0",
