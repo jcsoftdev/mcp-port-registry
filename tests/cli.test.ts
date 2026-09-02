@@ -72,7 +72,7 @@ describe("cli acquire / release / gc", () => {
 });
 
 describe("cli whoami (git context detection)", () => {
-  test("derives project from the origin remote and worktree from the branch", async () => {
+  test("derives project from the origin remote and worktree from the directory basename", async () => {
     const repo = join(dir, "repo");
     sh(["git", "init", "-q", "-b", "main", repo], dir);
     sh(["git", "-C", repo, "remote", "add", "origin", "git@github.com:jcsoftdev/My-App.git"], dir);
@@ -83,7 +83,20 @@ describe("cli whoami (git context detection)", () => {
     expect(main).toEqual({ project: "my-app", worktree: "main", isMain: true });
 
     const wt = JSON.parse((await run(["whoami", "--json"], join(dir, "wt-login"))).stdout);
-    expect(wt).toEqual({ project: "my-app", worktree: "feat/login", isMain: false });
+    expect(wt).toEqual({ project: "my-app", worktree: "wt-login", isMain: false });
+  });
+
+  test("switching branches inside a worktree keeps the same worktree id", async () => {
+    const repo = join(dir, "repo");
+    sh(["git", "init", "-q", "-b", "main", repo], dir);
+    sh(["git", "-C", repo, "commit", "-q", "--allow-empty", "-m", "init"], dir);
+    const wt = join(dir, "wt-task");
+    sh(["git", "-C", repo, "worktree", "add", "-q", "-b", "feat/one", wt], dir);
+    const before = JSON.parse((await run(["whoami", "--json"], wt)).stdout).worktree;
+    sh(["git", "-C", wt, "switch", "-q", "-c", "feat/two"], dir);
+    const after = JSON.parse((await run(["whoami", "--json"], wt)).stdout).worktree;
+    expect(after).toBe(before);
+    expect(after).toBe("wt-task");
   });
 
   test("falls back to the directory basename outside a git repo", async () => {
@@ -98,11 +111,11 @@ describe("cli whoami (git context detection)", () => {
     sh(["git", "-C", repo, "remote", "add", "origin", "https://github.com/jcsoftdev/my-app.git"], dir);
     sh(["git", "-C", repo, "commit", "-q", "--allow-empty", "-m", "init"], dir);
     sh(["git", "-C", repo, "worktree", "add", "-q", "-b", "feat/a", join(dir, "wt-a")], dir);
-    await run(["acquire", "--project", "my-app", "--worktree", "feat/a", "--technology", "redis"], repo);
-    await run(["acquire", "--project", "my-app", "--worktree", "feat/zombie", "--technology", "redis"], repo);
+    await run(["acquire", "--project", "my-app", "--worktree", "wt-a", "--technology", "redis"], repo);
+    await run(["acquire", "--project", "my-app", "--worktree", "wt-zombie", "--technology", "redis"], repo);
     const r = await run(["gc", "--auto"], repo);
     expect(r.stdout).toContain("reclaimed 1");
     const left = JSON.parse((await run(["leases", "--json"], repo)).stdout);
-    expect(left.map((l: { worktree: string }) => l.worktree)).toEqual(["feat/a"]);
+    expect(left.map((l: { worktree: string }) => l.worktree)).toEqual(["wt-a"]);
   });
 });
