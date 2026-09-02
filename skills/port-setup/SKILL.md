@@ -8,10 +8,12 @@ description: >
   "asignar puertos", "configurar puertos", "configura puertos",
   "configura puertos del proyecto", "inicializa puertos", "setea los puertos",
   or any variant about port assignment / configuration for the current project.
+  Also: "release ports", "free ports", "liberar puertos", "suelta los puertos"
+  when a worktree/task is finished.
 license: Apache-2.0
 metadata:
   author: jcsoftdev
-  version: "1.0"
+  version: "2.0"
 ---
 
 ## When to Use
@@ -27,6 +29,9 @@ Load this skill when the user asks to:
 - "asignar puertos", "configurar puertos", "configura puertos"
 - "configura puertos del proyecto", "inicializa puertos"
 - "setea los puertos", "asigna los puertos del proyecto"
+
+**Release triggers (both languages):** "release ports", "free ports", "liberar puertos",
+"suelta los puertos" — jump to **STEP R** below.
 
 ---
 
@@ -81,6 +86,27 @@ Use the priority order defined in `assets/detection-map.json` under `project_nam
 
 Normalize the result: lowercase, replace spaces and underscores with `-`.
 If none of the above yields a name, ask the user to provide one explicitly.
+
+### STEP 1b — Determine Worktree Identity
+
+Parallel tasks run in separate git worktrees of the same project. Each worktree
+must get its OWN ports, so detect which one you are in:
+
+```
+git rev-parse --git-dir          # e.g. /repo/.git/worktrees/feat-a  (linked worktree)
+git rev-parse --git-common-dir   # e.g. /repo/.git                   (shared)
+git rev-parse --abbrev-ref HEAD  # branch name
+```
+
+- `git-dir` == `git-common-dir` (after resolving) → **main worktree**. `worktree = "main"`.
+- Otherwise → **linked worktree**. `worktree = <branch name>` (or the directory
+  basename if HEAD is detached).
+- Not a git repo → treat as main worktree.
+
+Shortcut if the registry CLI is available: `bun <registry>/src/cli.ts whoami --json`
+returns `{ project, worktree, isMain }`.
+
+Record `worktree` and `isMain`. They decide which tools STEP 5 calls.
 
 ---
 
@@ -169,10 +195,23 @@ For each tech-id in `detected`:
     Wait for the user to choose before continuing.
 
 - **If** no existing port for this tech:
-  ```
-  CALL port_get(project=<project-name>, technology=<tech-id>)
-  ```
-  Returns the current assignment or creates a new collision-free one (idempotent).
+  - **Main worktree** (`isMain = true`):
+    ```
+    CALL port_get(project=<project-name>, technology=<tech-id>)
+    ```
+    Project-level assignment, shared by the main checkout. Idempotent.
+  - **Linked worktree** (`isMain = false`):
+    ```
+    CALL port_acquire(project=<project-name>, worktree=<worktree>, technology=<tech-id>)
+    ```
+    Per-worktree lease: unique across every worktree AND every project-level
+    assignment, verified free on the OS, sticky for this worktree while it lives.
+    Never call `port_get` from a linked worktree — it would return the main
+    checkout's port and the two dev servers would collide.
+
+  In a linked worktree, existing ports found in STEP 4 came from the main checkout's
+  `.env` (worktrees start as copies). Do NOT `port_set` them — they belong to main.
+  Call `port_acquire` and overwrite them in this worktree's `.env`.
 
 Record all results in `assignments: Map<tech-id, port>`.
 
@@ -240,6 +279,21 @@ Same once-per-session rule — don't overwrite an existing `.bak`.
 
 ---
 
+### STEP R — Release (worktree finished)
+
+When the user says the task/worktree is done ("release ports", "liberar puertos"):
+
+1. Determine `project` and `worktree` exactly as in STEP 1 / 1b.
+2. `CALL port_release(project=<project-name>, worktree=<worktree>)` — frees every
+   lease of that worktree at once.
+3. Report the released ports. Do not touch `.env` — the worktree is going away.
+
+If the worktree was already deleted without releasing, the registry self-heals:
+`port_gc(project, worktrees=[...live worktrees...])` or the SessionStart hook
+reclaims its leases.
+
+---
+
 ### STEP 8 — Report
 
 Print a Markdown table summarizing all assignments:
@@ -256,6 +310,7 @@ Source values:
 - `existing` — the port was already in `.env` / docker-compose; `port_set` was called.
 - `registry` — a prior assignment existed in the registry; `port_get` returned it.
 - `new` — a fresh collision-free port was assigned; `port_get` created it.
+- `lease` — per-worktree lease from `port_acquire` (linked worktree).
 
 **If dry-run**:
 ```
@@ -291,6 +346,10 @@ port_get(project: string, technology: string) → { port: number, ... }
 port_set(project: string, technology: string, port: number) → { ... }
 port_technologies(add_name?: string, add_port?: number) → { technologies: [...] }
 port_list(project?: string, technology?: string) → { assignments: [...] }
+port_acquire(project: string, worktree: string, technology: string) → { port: number, isNew: boolean, expiresAt, ... }
+port_release(project: string, worktree: string, technology?: string) → { released: [...] }
+port_leases(project?: string, worktree?: string) → [...]
+port_gc(project?: string, worktrees?: string[]) → { reclaimed: [...] }
 ```
 
 ---
@@ -329,6 +388,8 @@ number that overwrites the user's intentional choice.
 | Existing port in `.env` / docker-compose | `port_set` | Register user's choice as-is |
 | New tech, no existing port | `port_get` | Registry assigns collision-free port |
 | Re-run on same project | `port_get` | Idempotent — returns prior assignment |
+| Linked worktree (any tech) | `port_acquire` | Per-worktree lease; never collides with main or siblings |
+| Worktree/task finished | `port_release` | Frees the lease for the next task |
 | `port_set` returns conflict | Ask user | Manual resolution required |
 
 ---

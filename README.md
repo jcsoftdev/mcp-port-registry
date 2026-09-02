@@ -13,6 +13,27 @@ Project A + nextjs    → 3000
 Project B + nextjs    → 3001
 ```
 
+### Parallel worktrees
+
+Running several AI-agent tasks at once, each in its own `git worktree`? Project-level
+assignments are shared by every checkout of the project, so two worktrees would collide.
+`port_acquire` adds a **worktree dimension** and hands out a **lease** instead:
+
+```
+kanbai + main   + nextjs → 3001   (port_get — project-level, stable)
+kanbai + feat-a + nextjs → 3003   (port_acquire — lease)
+kanbai + feat-b + nextjs → 3004   (port_acquire — lease)
+```
+
+A lease is:
+
+- **Sticky** — the same project + worktree + technology always gets the same port back while it lives, so a worktree's `.env` stays valid across sessions.
+- **Unique** across every lease and every project-level assignment, and **verified free on the OS** (bind-probe on `127.0.0.1` and `::1`) before it is returned.
+- **Owned** by the MCP server process that issued it (one per client session). The server renews its leases every 10 minutes; when the session dies the renewals stop.
+- **Reclaimed** when: you call `port_release`; or `port_gc` is told the worktree no longer exists; or the owner is dead (pid gone, or the machine rebooted) **and** the TTL (24h by default) has passed. Every `port_acquire` sweeps stale leases first, so nothing leaks forever even if an agent forgets to release.
+
+Allocation runs inside `BEGIN IMMEDIATE` transactions with a 5s `busy_timeout`, so any number of server processes can share the database without ever handing out the same port twice.
+
 ## Requirements
 
 - macOS or Linux (x86_64 or arm64)
@@ -174,6 +195,71 @@ List all known technologies and their base ports. Optionally add a new one.
 | `add_name` | no | Name of technology to add |
 | `add_port` | no | Base port for the new technology |
 
+### `port_acquire`
+
+Lease a port for a project + worktree + technology triple. See [Parallel worktrees](#parallel-worktrees).
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `project` | yes | Project identifier |
+| `worktree` | yes | Worktree id — branch name or worktree directory basename |
+| `technology` | yes | Technology name |
+| `session_id` | no | Recorded on the lease for auditing |
+
+Returns the lease (`port`, `expiresAt`, `ownerPid`, …) plus `isNew`.
+
+### `port_release`
+
+Release leases when the task is done. With `technology`: one lease. Without: every lease of the worktree.
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `project` | yes | Project identifier |
+| `worktree` | yes | Worktree id |
+| `technology` | no | Restrict to one technology |
+
+### `port_leases`
+
+List active leases, optionally filtered by `project` and/or `worktree`.
+
+### `port_gc`
+
+Reclaim stale leases (owner dead **and** TTL expired). Pass `project` + `worktrees` (the live list from `git worktree list`) to also reclaim leases of worktrees that were deleted without releasing.
+
+| Param | Required | Description |
+|-------|----------|-------------|
+| `project` | no | Scope for reconciliation (required with `worktrees`) |
+| `worktrees` | no | Live worktree ids for `project` |
+
+## CLI (for hooks and scripts)
+
+The same registry is reachable without MCP:
+
+```bash
+bun src/cli.ts whoami --json                                   # { project, worktree, isMain } from git in cwd
+bun src/cli.ts acquire --technology postgresql --technology redis   # prints PORT_POSTGRESQL=5433 …
+bun src/cli.ts release                                         # frees every lease of this worktree
+bun src/cli.ts gc --auto                                       # reconcile this repo against `git worktree list`
+bun src/cli.ts leases [--project P] [--json]
+```
+
+`acquire` / `release` default `--project` and `--worktree` to what `whoami` detects. `acquire` output is ready for `>> .env` or `>> "$CLAUDE_ENV_FILE"`.
+
+## Claude Code hooks (automatic cleanup)
+
+`hooks/claude-code/port-registry-hook.sh` wires the CLI into Claude Code's lifecycle:
+
+| Event | Mode | Effect |
+|-------|------|--------|
+| `SessionStart` | `gc` | Reclaims stale leases and leases of worktrees that no longer exist |
+| `WorktreeRemove` | `release` | Frees every lease of the worktree being removed |
+
+Merge [`hooks/claude-code/settings.snippet.json`](hooks/claude-code/settings.snippet.json) into `~/.claude/settings.json`, replacing `<ABSOLUTE_PATH>` with where this repo lives (the installer uses `~/.local/share`). The script always exits 0, so a registry hiccup can never block a session.
+
+Cleanup is defence in depth: the hook is the fast path, `port_gc` on every acquire is the safety net. Neither `git worktree remove` nor a crashed session fires any hook, which is exactly why the TTL + owner-liveness sweep exists.
+
+To see the exact payload Claude Code sends for an event, add `port-registry-hook.sh log` to that event and read `~/.cache/mcp-port-registry/hooks.log`.
+
 ## Built-in Technologies
 
 | Technology | Base Port |
@@ -200,6 +286,13 @@ SQLite database at `$XDG_DATA_HOME/mcp-port-registry/registry.db` (defaults to `
 
 Override with `PORT_REGISTRY_DB=/abs/path/to.db` (useful for tests or per-host isolation).
 
+Schema version 2 adds the `leases` table; version 1 databases upgrade in place on first open. Other knobs:
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `PORT_REGISTRY_LEASE_TTL_MS` | `86400000` (24h) | How long a lease survives after its owner dies |
+| `PORT_REGISTRY_SKIP_PROBE` | unset | Set to `1` to skip the OS bind-probe (tests, CI) |
+
 ## Skills
 
 ### `port-setup`
@@ -218,12 +311,14 @@ An AI agent skill that auto-detects your project's tech stack and wires up colli
 **What it does:**
 1. Detects your tech stack (PostgreSQL, Redis, Next.js, etc.) via `package.json`, `pyproject.toml`, and `docker-compose.yml`.
 2. Scans existing `.env` for already-assigned ports and pins them in the registry (`port_set`).
-3. Calls `port_get` for each unassigned tech — collision-free, idempotent.
+3. Calls `port_get` (main worktree) or `port_acquire` (linked worktree) for each unassigned tech — collision-free, idempotent.
 4. Writes port vars to `.env` (and `.env.local` if present) and updates `docker-compose.yml` ports.
 5. Creates `.env.bak` / `docker-compose.yml.bak` before any modification.
 6. Prints a summary table of all assignments.
 
 **Dry-run mode**: say "dry run" / "preview" / "sin escribir" — shows planned changes without writing any files.
+
+**Release**: say "release ports" / "liberar puertos" when a worktree's task is finished — calls `port_release` for that worktree.
 
 **Installing the skill** (copy to your harness skills directory):
 ```bash
