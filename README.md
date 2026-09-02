@@ -57,6 +57,7 @@ The installer will:
 3. Clone the repo to `~/.local/share/mcp-port-registry`
 4. Link the `port-registry` command into `~/.local/bin` (warns if that dir is not on your PATH)
 5. Launch an interactive TUI to detect and configure supported clients
+6. For Claude Code, also install the lifecycle hooks and the `port-setup` skill (asks first in interactive mode)
 
 **Supported clients**: Claude Code, Claude Desktop, Cursor, Windsurf, Cline, Continue, Zed, Pi (gentle-ai)
 
@@ -261,7 +262,7 @@ port-registry hook gc|release|log                             # Claude Code hook
 | `SessionStart` | `gc` | Reclaims stale leases and leases of worktrees that no longer exist |
 | `WorktreeRemove` | `release` | Frees every lease of the worktree being removed |
 
-Merge [`hooks/claude-code/settings.snippet.json`](hooks/claude-code/settings.snippet.json) into `~/.claude/settings.json`. It calls `"$HOME/.local/bin/port-registry"` explicitly because hooks do not always inherit your shell's PATH. `hook` always exits 0, so a registry hiccup can never block a session or a worktree operation.
+The installer merges these into `~/.claude/settings.json` when it configures Claude Code (backing the file up first, idempotent on re-runs, other hooks untouched). Manual alternative: merge [`hooks/claude-code/settings.snippet.json`](hooks/claude-code/settings.snippet.json) yourself. Either way the command path is absolute because hooks do not always inherit your shell's PATH, and `hook` always exits 0, so a registry hiccup can never block a session or a worktree operation.
 
 Cleanup is defence in depth: the hook is the fast path, `port_gc` on every acquire is the safety net. Neither `git worktree remove` nor a crashed session fires any hook, which is exactly why the TTL + owner-liveness sweep exists.
 
@@ -327,9 +328,8 @@ An AI agent skill that auto-detects your project's tech stack and wires up colli
 
 **Release**: say "release ports" / "liberar puertos" when a worktree's task is finished — calls `port_release` for that worktree.
 
-**Installing the skill** (copy to your harness skills directory):
+**Installing the skill**: the installer copies it to `~/.claude/skills/port-setup` when it configures Claude Code, and upgrades that copy on every re-run. It only touches copies carrying the `managed-by: mcp-port-registry` marker in `SKILL.md`; remove the marker to pin your own edits. Other harnesses, or manual install:
 ```bash
-# Claude Code
 cp -r skills/port-setup ~/.claude/skills/port-setup
 ```
 

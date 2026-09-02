@@ -13,6 +13,8 @@ import { isInteractive } from "./lib/tty";
 import { runAdapter } from "./lib/adapter";
 import type { Adapter, WriteOutcome } from "./lib/adapter";
 import { linkCli, isOnPath, defaultBinDir } from "./lib/link-cli";
+import { installHooks, installSkill } from "./lib/claude-code-extras";
+import os from "node:os";
 
 // Import all adapter singletons
 import { claudeCodeAdapter } from "./clients/claude-code";
@@ -40,6 +42,8 @@ const REPO_ROOT = path.join(import.meta.dirname ?? __dirname, "..");
 const SERVER_PATH = path.join(REPO_ROOT, "src", "server.ts");
 // CLI launcher exposed as the `port-registry` command
 const LAUNCHER_PATH = path.join(REPO_ROOT, "bin", "port-registry");
+// Skill shipped with the repo, copied into ~/.claude/skills for Claude Code
+const SKILL_SOURCE = path.join(REPO_ROOT, "skills", "port-setup");
 
 interface AdapterResult {
   adapter: Adapter;
@@ -49,7 +53,7 @@ interface AdapterResult {
 async function main() {
   intro("MCP Port Registry Installer");
 
-  installCommand();
+  const command = installCommand();
 
   // Detect all adapters in parallel
   const detections = await Promise.all(
@@ -59,17 +63,48 @@ async function main() {
   const detected = detections.filter((d) => d.result.installed);
   const undetected = detections.filter((d) => !d.result.installed);
 
-  if (isInteractive()) {
-    await runInteractive(detected.map((d) => d.adapter), undetected.map((d) => d.adapter));
-  } else {
-    await runNonInteractive(detected.map((d) => d.adapter));
+  const configured = isInteractive()
+    ? await runInteractive(detected.map((d) => d.adapter), undetected.map((d) => d.adapter))
+    : await runNonInteractive(detected.map((d) => d.adapter));
+
+  if (command && configured.includes("claude-code")) {
+    await installClaudeCodeExtras(command);
   }
+}
+
+/**
+ * Claude Code gets two extras on top of the MCP entry: lifecycle hooks that
+ * release/reclaim worktree leases automatically, and the port-setup skill.
+ */
+async function installClaudeCodeExtras(command: string) {
+  if (isInteractive()) {
+    const ok = await confirm({
+      message: "Claude Code: install lifecycle hooks (auto-release worktree ports) and the port-setup skill?",
+      initialValue: true,
+    });
+    if (isCancel(ok) || !ok) {
+      log.info("Skipped Claude Code hooks and skill.");
+      return;
+    }
+  }
+
+  const homeDir = os.homedir();
+  const hooks = await installHooks({ homeDir, command });
+  report("Claude Code hooks (SessionStart gc, WorktreeRemove release)", hooks);
+  const skill = await installSkill({ homeDir, sourceDir: SKILL_SOURCE });
+  report("port-setup skill (~/.claude/skills/port-setup)", skill);
+}
+
+function report(label: string, outcome: WriteOutcome) {
+  if (outcome.status === "configured") log.success(`${label}: installed`);
+  else if (outcome.status === "already-configured") log.info(`${label}: already installed`);
+  else log.warn(`${label}: ${outcome.error}`);
 }
 
 async function runInteractive(
   detectedAdapters: Adapter[],
   undetectedAdapters: Adapter[]
-) {
+): Promise<string[]> {
   if (detectedAdapters.length === 0 && undetectedAdapters.length === 0) {
     cancel("No supported clients found on this system.");
     process.exit(0);
@@ -137,9 +172,14 @@ async function runInteractive(
   }
 
   printSummary(results);
+  return okIds(results);
 }
 
-async function runNonInteractive(detectedAdapters: Adapter[]) {
+function okIds(results: AdapterResult[]): string[] {
+  return results.filter((r) => r.outcome.status !== "failed").map((r) => r.adapter.id);
+}
+
+async function runNonInteractive(detectedAdapters: Adapter[]): Promise<string[]> {
   if (detectedAdapters.length === 0) {
     log.info("No detected clients to configure.");
     process.exit(0);
@@ -161,20 +201,23 @@ async function runNonInteractive(detectedAdapters: Adapter[]) {
   }
 
   printSummary(results);
+  return okIds(results);
 }
 
-function installCommand() {
+/** Link the launcher into ~/.local/bin; returns the command path, or null if that failed. */
+function installCommand(): string | null {
   const binDir = defaultBinDir();
   const outcome = linkCli({ target: LAUNCHER_PATH, binDir });
   if (outcome.status === "failed") {
     log.warn(`Could not install the \`port-registry\` command: ${outcome.error}`);
-    return;
+    return null;
   }
   const verb = outcome.status === "already-linked" ? "already installed" : outcome.status;
   log.success(`\`port-registry\` command ${verb} at ${outcome.path}`);
   if (!isOnPath(binDir)) {
     log.warn(`${binDir} is not on your PATH. Add this to your shell profile:\n  export PATH="${binDir}:$PATH"`);
   }
+  return outcome.path;
 }
 
 function printSummary(results: AdapterResult[]) {

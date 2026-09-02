@@ -14,6 +14,9 @@ license: Apache-2.0
 metadata:
   author: jcsoftdev
   version: "2.0"
+  # Ownership marker: the mcp-port-registry installer upgrades copies that carry
+  # this line and leaves hand-written skills alone. Remove it to pin your copy.
+  managed-by: mcp-port-registry
 ---
 
 ## When to Use
