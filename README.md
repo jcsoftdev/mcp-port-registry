@@ -25,6 +25,8 @@ kanbai + feat-a + nextjs → 3003   (port_acquire — lease)
 kanbai + feat-b + nextjs → 3004   (port_acquire — lease)
 ```
 
+The worktree id is the worktree **directory** basename (`main` for the main checkout, whatever branch it has out). A worktree is what `git worktree remove` deletes, and switching branches inside one must not change its ports or invalidate its `.env`.
+
 A lease is:
 
 - **Sticky** — the same project + worktree + technology always gets the same port back while it lives, so a worktree's `.env` stays valid across sessions.
@@ -202,7 +204,7 @@ Lease a port for a project + worktree + technology triple. See [Parallel worktre
 | Param | Required | Description |
 |-------|----------|-------------|
 | `project` | yes | Project identifier |
-| `worktree` | yes | Worktree id — branch name or worktree directory basename |
+| `worktree` | yes | Worktree id — the worktree directory basename (`main` for the main checkout) |
 | `technology` | yes | Technology name |
 | `session_id` | no | Recorded on the lease for auditing |
 

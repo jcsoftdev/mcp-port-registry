@@ -23,7 +23,7 @@ const technology = { type: "string", description: "Technology name (e.g., 'postg
 const worktree = {
   type: "string",
   description:
-    "Worktree identifier — usually the branch name or the worktree directory basename. Two worktrees of the same project get different ports.",
+    "Worktree identifier — the worktree directory basename, or \"main\" for the main checkout. Two worktrees of the same project get different ports.",
 };
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [

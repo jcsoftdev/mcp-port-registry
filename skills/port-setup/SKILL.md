@@ -95,12 +95,14 @@ must get its OWN ports, so detect which one you are in:
 ```
 git rev-parse --git-dir          # e.g. /repo/.git/worktrees/feat-a  (linked worktree)
 git rev-parse --git-common-dir   # e.g. /repo/.git                   (shared)
-git rev-parse --abbrev-ref HEAD  # branch name
+git rev-parse --show-toplevel    # worktree directory
 ```
 
-- `git-dir` == `git-common-dir` (after resolving) → **main worktree**. `worktree = "main"`.
-- Otherwise → **linked worktree**. `worktree = <branch name>` (or the directory
-  basename if HEAD is detached).
+- `git-dir` == `git-common-dir` (after resolving) → **main worktree**. `worktree = "main"`,
+  whatever branch it has checked out (develop, qa, main…).
+- Otherwise → **linked worktree**. `worktree = basename(show-toplevel)`. The id is the
+  directory, not the branch: `git worktree remove` deletes a directory, and switching
+  branches inside a worktree must not change its ports.
 - Not a git repo → treat as main worktree.
 
 Shortcut if the registry CLI is available: `bun <registry>/src/cli.ts whoami --json`

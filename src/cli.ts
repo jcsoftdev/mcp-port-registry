@@ -42,23 +42,23 @@ export function detectGitContext(cwd: string): GitContext {
   const remote = git(["remote", "get-url", "origin"], cwd);
   const project = remote ? repoNameFromRemote(remote) : basename(resolve(commonDir, "..")).toLowerCase();
 
-  const branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
-  const worktree = branch && branch !== "HEAD" ? branch : basename(top);
+  // A worktree is a directory: that is what `git worktree remove` deletes, and
+  // switching branches inside it must not change its ports. The main checkout
+  // is always "main" regardless of the branch it has checked out.
+  const worktree = isMain ? "main" : basename(top);
   return { project, worktree, isMain };
 }
 
-/** Worktree ids (branch name, or directory basename when detached) of every live worktree. */
+/** Worktree ids (directory basenames; the main checkout is "main") of every live worktree. */
 export function listLiveWorktrees(cwd: string): string[] {
   const out = git(["worktree", "list", "--porcelain"], cwd);
   if (!out) return [];
-  const ids: string[] = [];
-  let path = "";
-  for (const line of out.split("\n")) {
-    if (line.startsWith("worktree ")) path = line.slice("worktree ".length);
-    else if (line.startsWith("branch ")) ids.push(line.slice("branch ".length).replace(/^refs\/heads\//, ""));
-    else if (line === "detached") ids.push(basename(path));
-  }
-  return ids;
+  const paths = out
+    .split("\n")
+    .filter((line) => line.startsWith("worktree "))
+    .map((line) => line.slice("worktree ".length));
+  // `git worktree list` prints the main worktree first.
+  return paths.map((p, i) => (i === 0 ? "main" : basename(p)));
 }
 
 function envVarName(technology: string): string {
